@@ -1,0 +1,82 @@
+# ---------------------------------------------
+# PYTHON
+# ---------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+.env/
+.env.*
+
+
+# ---------------------------------------------
+# DJANGO / DRF
+# ---------------------------------------------
+# Archivos de configuración locales
+*.local
+*.dev
+*.test
+*.env
+
+# Archivos sensibles
+.env
+*.sqlite3
+
+# Archivos de compilación de Django
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# Archivos generados
+*.log
+
+# Migraciones compiladas o innecesarias
+**/migrations/__pycache__/
+**/migrations/*.pyc
+
+# Opción: si quieres ignorar TODAS las migraciones (no recomendado)
+# **/migrations/
+# except __init__.py
+# !**/migrations/__init__.py
+
+
+# ---------------------------------------------
+# IDEs / EDITORES
+# ---------------------------------------------
+# VS Code
+.vscode/
+.settings/
+
+# PyCharm
+.idea/
+*.iml
+
+
+# ---------------------------------------------
+# SISTEMA / OTROS
+# ---------------------------------------------
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
+*.swo
+
+# Archivos de cobertura de tests
+htmlcov/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+.coverage.*
+
+# Archivos de build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Docker
+docker-data/
