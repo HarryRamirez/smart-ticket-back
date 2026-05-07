@@ -82,9 +82,13 @@ INSTALLED_APPS = [
     'project',
     'users',
     'ticket',
+    'sprint',
     'ticket_history',
+    'channels',
     'rest_framework_simplejwt.token_blacklist', 
 ]
+
+ASGI_APPLICATION = 'smart_ticket.asgi.application'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -113,6 +117,16 @@ TEMPLATES = [
         },
     },
 ]
+
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 WSGI_APPLICATION = 'smart_ticket.wsgi.application'
 

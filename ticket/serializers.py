@@ -2,28 +2,57 @@ from rest_framework import serializers
 
 from project.models import Project
 from .models import Ticket, Status
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
+
+class UserSerializer(serializers.ModelSerializer):
+    
+    avatar = serializers.SerializerMethodField()
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'avatar']
+    
+    def get_avatar(self, obj):
+        if obj.first_name and obj.last_name:
+            initials = f"{obj.first_name[0]}{obj.last_name[0]}".upper()
+            return f"{initials}"
 
 class TicketSerializer(serializers.ModelSerializer):
-    project_name = serializers.CharField(source='project.name', read_only=True)
-    status_name = serializers.CharField(source='status.name', read_only=True)
-    assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True)
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-    labels_names = serializers.SerializerMethodField()
+    project = serializers.StringRelatedField()
+    status= serializers.StringRelatedField()
+    assigned_to = UserSerializer(read_only=True)
+    created_by = serializers.StringRelatedField()
+    #labels = serializers.SerializerMethodField()
+    tickets_count = serializers.IntegerField(read_only=True)
+    
 
     class Meta:
         model = Ticket
         fields = [
             'id', 'key', 'title', 'description', 'category', 'priority', 'type',
             'summary', 'suggested_solution', 'is_active',
-            'project', 'project_name', 'status', 'status_name',
-            'assigned_to', 'assigned_to_username', 'due_date', 'created_by', 'created_by_username',
-            'labels_names', 'created_at', 'updated_at'
+            'project', 'status',
+            'assigned_to', 'due_date', 'created_by',
+            'created_at', 'updated_at', 'tickets_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_labels_names(self, obj):
+    def get_labels(self, obj):
         return list(obj.labels.values_list('name', flat=True))
+    
+
+    
+    
+    
+class BacklogTicketsSerializer(serializers.ModelSerializer):
+    
+    assigned_to = UserSerializer(read_only=True)
+    status = serializers.StringRelatedField()
+    
+    class Meta:
+        model = Ticket
+        fields = ['id', 'key', 'title', 'priority', 'type', 'status', 'assigned_to']
     
 
 class DueTicketSerializer(serializers.Serializer):
@@ -44,6 +73,7 @@ class CreateTicketSerializer(serializers.ModelSerializer):
             "category",
             "priority",
             "type",
+            "status",
             "summary",
             "suggested_solution",
             "due_date",
@@ -52,4 +82,36 @@ class CreateTicketSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'created_by': {'read_only': True}
         }
+        
 
+class TicketsByStatusListSerializer(serializers.ModelSerializer):
+    
+    tickets = TicketSerializer(many=True, read_only=True)
+    class Meta:
+        model = Status
+        fields = ['id', 'name', 'order','tickets']
+        
+        
+        
+        
+
+class AssignTicketSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = Ticket
+        fields = ['assigned_to']
+
+    def validate_assigned_to(self, value):
+        project = self.context['project']
+
+        if value and not project.members.filter(id=value.id).exists():
+            raise serializers.ValidationError(
+                "Usuario no pertenece al proyecto"
+            )
+
+        return value

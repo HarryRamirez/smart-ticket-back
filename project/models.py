@@ -69,7 +69,7 @@ class Sprint(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['project'],
-                condition=models.Q(is_active=True),
+                condition=models.Q(status='activo'),
                 name='unique_active_sprint_per_project'
             )
         ]
@@ -81,8 +81,45 @@ class Sprint(models.Model):
     
     def save(self, *args, **kwargs):
         self.full_clean()
+        
+        if self.status == 'activo':
+            Sprint.objects.filter(
+                project=self.project,
+                status='activo'
+            ).exclude(id=self.id).update(status='planificado')
+        
         super().save(*args, **kwargs)
         
     def __str__(self):
         return f"{self.name} ({self.project.name})"
 
+
+
+
+
+
+# class Activity(models.Model):
+
+#     EVENT_TYPES = [
+#         ('TICKET_CREATED', 'Ticket creado'),
+#         ('TICKET_DELETED', 'Ticket eliminado'),
+#         ('TICKET_MOVED', 'Ticket movido a sprint'),
+#         ('TICKET_REMOVED_FROM_SPRINT', 'Ticket removido de sprint'),
+#         ('SPRINT_CREATED', 'Sprint creado'),
+#         ('SPRINT_DELETED', 'Sprint eliminado'),
+#         ('STATUS_CHANGED', 'Estado cambiado'),
+#         ('COMMENT_CREATED', 'Comentario creado'),
+#         ('ATTACHMENT_UPLOADED', 'Archivo subido'),
+#     ]
+
+#     project = models.ForeignKey(Project, on_delete=models.CASCADE)
+#     user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+#     event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+#     message = models.TextField()
+
+#     # Opcional pero muy útil
+#     ticket = models.ForeignKey(Ticket, null=True, blank=True, on_delete=models.CASCADE)
+#     sprint = models.ForeignKey(Sprint, null=True, blank=True, on_delete=models.CASCADE)
+
+#     created_at = models.DateTimeField(auto_now_add=True)

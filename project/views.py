@@ -1,7 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
-from django.db.models import Q, Count, Prefetch
+from django.db.models import Q, Count, Max, Prefetch
 from django.contrib.auth.models import User
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
@@ -12,11 +12,10 @@ from rest_framework import status
 
 from ticket.models import Attachment, Comment, Status, Ticket, TicketHistory
 from .models import Project, ProjectMember
-from .serializers import CreateProjectSerializer, ProjectListSerialzer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusProjectSerializer, UserSerializer
+from .serializers import CreateProjectSerializer, DashboardCardsSerializer, ProjectListSerialzer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusCreateSerializer, StatusProjectSerializer, UserSerializer
 import logging
 
-logger = logging.getLogger(__name__)
-
+logger = logging.getLogger(__name__)    
 
 class ProjectPagination(PageNumberPagination):
     page_size = 10
@@ -33,8 +32,8 @@ class ProjectListAPIView(ListAPIView):
 
     def get_queryset(self):
         
-        queryset = Project.objects.filter( members=self.request.user)\
-                   .annotate(members_count=Count('members', distinct=True))\
+        queryset = Project.objects.annotate(members_count=Count('members', distinct=True))\
+                   .filter( members=self.request.user)\
                    .select_related('created_by').prefetch_related('members', 'sprints')
         
         search_term = self.request.query_params.get('search_term')
@@ -89,7 +88,7 @@ class ActivityAPIView(APIView):
         activities = []
 
         # Tickets creados
-        tickets = Ticket.objects.filter(pk=pk).select_related('created_by')[:10]
+        tickets = Ticket.objects.filter(project_id=pk).select_related('created_by')[:10]
 
         for t in tickets:
             actor = "Tú" if t.created_by == user else t.created_by.username
@@ -384,3 +383,109 @@ class MemberSearchProjectAPIView(ListAPIView):
             )
 
         return queryset
+    
+
+
+
+class DashboardCardsAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # Query 1 → proyectos del usuario
+        projects = ProjectMember.objects.filter(user=request.user)\
+                    .values_list('project', flat=True)
+
+        project_count = projects.count()
+
+        # Query 2 → todos los conteos en una sola
+        ticket_stats = Ticket.objects.filter(project__in=projects).aggregate(
+            tickets_count=Count('id'),
+            my_tickets_count=Count('id', filter=Q(assigned_to=request.user)),
+            unassigned_tickets_count=Count('id', filter=Q(assigned_to__isnull=True))
+        )
+
+        data = {
+            "project_count": project_count,
+            "tickets_count": ticket_stats["tickets_count"],
+            "my_tickets_count": ticket_stats["my_tickets_count"],
+            "unassigned_tickets_count": ticket_stats["unassigned_tickets_count"],
+        }
+
+        serializer = DashboardCardsSerializer(data)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+
+class StatusCreateAPIView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, project_id):
+        
+        project = get_object_or_404(Project, id=project_id)
+
+        serializer = StatusCreateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+
+            # calcula el siguiente order
+            last_order = Status.objects.filter(project=project)\
+                        .aggregate(Max('order'))['order__max']
+            
+            next_order = (last_order or 0) + 1
+
+            status_obj = serializer.save(
+                project=project,
+                created_by=request.user,
+                order=next_order
+            )
+
+            return Response(
+                StatusCreateSerializer(status_obj).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
+
+class ProjectDeleteAPIView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, project_id):
+        try:
+            project = Project.objects.get(pk=project_id, members=request.user)
+        except Project.DoesNotExist:
+            return Response({'message': 'Proyecto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        
+        project.delete()
+        return Response({'message': 'Proyecto eliminado correctamente'}, status=status.HTTP_200_OK)
+    
+    
+    
+    
+    
+class StatusDeleteAPIView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, project_id, status_id):
+        
+        project = get_object_or_404(Project, id=project_id)
+        status_obj = get_object_or_404(Status, id=status_id, project=project)
+
+        if status_obj.tickets.exists():
+            return Response(
+                {'message': 'No se puede eliminar un estado con tickets asignados'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        status_obj.is_active = False
+        status_obj.save()
+
+        return Response({'message': 'Estado eliminado correctamente'}, status=status.HTTP_200_OK)

@@ -1,7 +1,7 @@
 from django.urls import path
 
 
-from .views import ActivityAPIView, MemberSearchProjectAPIView, ProjectListAPIView, CreateProjectAPIView, GetProjectAPIView, ProjectMemberCreateAPIView, ProjectMemberDeleteAPIView, ProjectMemberUpdateRoleAPIView, ProjectMembersListAPIView, StatusProjectAPIView, UpdateProjectAPIView, DeleteProjectAPIView
+from .views import ActivityAPIView, DashboardCardsAPIView, MemberSearchProjectAPIView, ProjectDeleteAPIView, ProjectListAPIView, CreateProjectAPIView, GetProjectAPIView, ProjectMemberCreateAPIView, ProjectMemberDeleteAPIView, ProjectMemberUpdateRoleAPIView, ProjectMembersListAPIView, StatusCreateAPIView, StatusDeleteAPIView, StatusProjectAPIView, UpdateProjectAPIView, DeleteProjectAPIView
 
 urlpatterns = [
     path("list/", ProjectListAPIView.as_view(), name="project-list"),
@@ -16,4 +16,8 @@ urlpatterns = [
     path("<int:pk>/member/<int:member_id>/update/", ProjectMemberUpdateRoleAPIView.as_view(), name="project-members-update"),
     path("<int:pk>/member/<int:member_id>/delete/", ProjectMemberDeleteAPIView.as_view(), name="project-members-delete"),
     path('users/search/', MemberSearchProjectAPIView.as_view(), name='user-search'),
+    path("dashboard/cards/", DashboardCardsAPIView.as_view(), name="dashboard-cards"),
+    path('<int:project_id>/status/', StatusCreateAPIView.as_view(), name='create-status'),
+    path('<int:project_id>/delete/', ProjectDeleteAPIView.as_view(), name='delete-project'),
+    path('<int:project_id>/status/<int:status_id>/delete/', StatusDeleteAPIView.as_view(), name='delete-status'),
 ]

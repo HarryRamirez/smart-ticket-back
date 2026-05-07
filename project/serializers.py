@@ -121,7 +121,22 @@ class CreateProjectSerializer(serializers.ModelSerializer):
 
 
 
+class DashboardCardsSerializer(serializers.Serializer):
+    
+    project_count = serializers.IntegerField(read_only=True)
+    my_tickets_count = serializers.IntegerField(read_only=True)
+    tickets_count = serializers.IntegerField(read_only=True)
+    unassigned_tickets_count = serializers.IntegerField(read_only=True)
+    
 
+
+class StatusCreateSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Status
+        fields = ['name', 'order']
+    
+        
  
 
 

@@ -44,21 +44,21 @@ class Ticket(models.Model):
     ]
 
     PRIORITY_CHOICES = [
-        ('crítica', 'Crítica'),
-        ('alta', 'Alta'),
-        ('media', 'Media'),
-        ('baja', 'Baja'),
-        ('muy_baja', 'Muy baja'),
+        ('Crítica', 'Crítica'),
+        ('Alta', 'Alta'),
+        ('Media', 'Media'),
+        ('Baja', 'Baja'),
+        ('Muy_baja', 'Muy baja'),
     ]
 
     TYPE_CHOICES = [
-        ('bug', 'Bug'),
-        ('tarea', 'Tarea'),
-        ('historia', 'Historia de usuario'),
-        ('mejora', 'Mejora'),
-        ('épica', 'Épica'),
+        ('Bug', 'Bug'),
+        ('Tarea', 'Tarea'),
+        ('Historia', 'Historia de usuario'),
+        ('Mejora', 'Mejora'),
+        ('Épica', 'Épica'),
     ]
-    key = models.CharField(max_length=10, unique=True, db_index=True)
+    key = models.CharField(max_length=10, db_index=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tickets')
     title = models.CharField(max_length=255)
     description = models.TextField()
@@ -79,6 +79,12 @@ class Ticket(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+        models.UniqueConstraint(
+            fields=['project', 'key'],
+            name='unique_key_per_project'
+            )
+        ]
         indexes = [
             models.Index(fields=['project', '-created_at']),
             models.Index(fields=['status', 'is_active']),

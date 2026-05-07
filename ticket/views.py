@@ -1,23 +1,50 @@
-from rest_framework.views import APIView
-from rest_framework.generics import ListAPIView
-from django.db.models import Q
+from rest_framework.views import APIView, PermissionDenied
+from rest_framework.generics import ListAPIView, CreateAPIView, UpdateAPIView
+from django.db.models import Q, Count, Prefetch
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.timesince import timesince
 from datetime import timedelta
 from rest_framework import status
 
-from project.models import Project
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+from project.models import Project, Sprint
 from .models import Status, Ticket, TicketHistory
 from utils.llm_client import ticket_with_llm
-from .serializers import CreateTicketSerializer, TicketSerializer
+from .serializers import AssignTicketSerializer, BacklogTicketsSerializer, CreateTicketSerializer, TicketSerializer, TicketsByStatusListSerializer
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+
+def send_activity(project_id, user, message, created_at):
+    actor = user.username
+
+    data = {
+        "message": message,
+        "user": actor,
+        "created_at": str(created_at),
+        "time_ago": timesince(created_at, timezone.now()) + " atrás"
+    }
+
+    channel_layer = get_channel_layer()
+
+    async_to_sync(channel_layer.group_send)(
+        f'activities_{project_id}',
+        {
+            'type': 'send_activity',
+            'data': data
+        }
+    )
+    
+    
 class TicketPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -34,9 +61,12 @@ class TicketListAPIView(ListAPIView):
     
     def get_queryset(self):
         
+        project_id = self.kwargs.get('project_id') 
+        
         queryset = Ticket.objects.select_related(
             'project', 'status', 'assigned_to', 'created_by'
-        ).prefetch_related('labels').filter(project__members=self.request.user).order_by('-created_at')
+        ).prefetch_related('labels').filter(project__members=self.request.user, project__id=project_id
+        ).order_by('-created_at')
         
         search_term = self.request.query_params.get('search_term')
         search_category = self.request.query_params.get('search_category')
@@ -77,6 +107,41 @@ class TicketListAPIView(ListAPIView):
     
     
     
+class BacklogTicketsAPIView(ListAPIView):
+    
+    permission_classes = [IsAuthenticated]
+    
+    pagination_class = TicketPagination
+    serializer_class = BacklogTicketsSerializer
+    
+    def get_queryset(self):
+        
+        project_id = self.kwargs['project_id']
+        queryset = Ticket.objects.filter(project__members=self.request.user, project_id=project_id, sprint__isnull=True, is_active=True)\
+                   .select_related('project', 'status', 'assigned_to').prefetch_related('labels')\
+                   .order_by('-created_at')
+        
+        search_term = self.request.query_params.get('search_term')
+        
+        if search_term:
+            queryset = queryset.filter(Q(title__icontains=search_term) | Q(key__icontains=search_term))
+        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        
+        pagination = request.query_params.get('paginate', 'true').lower()
+        queryset = self.get_queryset()
+        
+        if pagination == 'false':
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'count': queryset.count(),
+                'results': serializer.data
+            })
+            
+        return super().list(request, *args, **kwargs)
+    
     
     
     
@@ -109,41 +174,31 @@ class TicketGenerateView(APIView):
 
 
 # Metodo que crea el ticket
-class CreateTicketAPIView(APIView):
+class CreateTicketAPIView(CreateAPIView):
     
+    serializer_class = CreateTicketSerializer
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, project_id):
-        
-        project = get_object_or_404(Project, id=project_id)
+    def get_project(self):
+        return get_object_or_404(Project, id=self.kwargs['project_id'])
 
-        # validar que el usuario pertenece al proyecto
-        if not project.members.filter(id=request.user.id).exists():
-            return Response(
-                {"error": "No perteneces a este proyecto"},
-                status=status.HTTP_403_FORBIDDEN
-            )
+    def perform_create(self, serializer):
+        project = self.get_project()
 
-        serializer = CreateTicketSerializer(
-            data=request.data,
-            context={'request': request}
+        if not project.members.filter(id=self.request.user.id).exists():
+            raise PermissionDenied("No perteneces a este proyecto")
+
+        ticket = serializer.save(
+            project=project,
+            created_by=self.request.user
         )
 
-        if serializer.is_valid():
-            ticket = serializer.save(
-                project=project,              
-                created_by=request.user       
-            )
-
-            return Response(
-                TicketSerializer(ticket).data,
-                status=status.HTTP_201_CREATED
-            )
-
-        return Response(
-            {'errors': serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        # send_activity(
+        #     project_id=ticket.project.id,
+        #     user=self.request.user,
+        #     message=f"{self.request.user.username} creó el ticket #{ticket.key}",
+        #     created_at=ticket.created_at
+        # )
      
      
      
@@ -153,9 +208,9 @@ class UpdateStatusTicketAPIView(APIView):
     
     permission_classes = [IsAuthenticated]
     
-    def patch(self, request, pk):
+    def patch(self, request, project_id, ticket_id):
         
-        ticket = Ticket.objects.filter(id=pk).first()
+        ticket = Ticket.objects.filter(id=ticket_id, project__id=project_id).first()
         
         if not ticket:
             return Response({'detail': 'Ticket no encontrado'}, status=status.HTTP_404_NOT_FOUND)
@@ -179,6 +234,13 @@ class UpdateStatusTicketAPIView(APIView):
             changed_by=request.user,
             old_status=old_status,
             new_status=new_status
+        )
+        
+        send_activity(
+            project_id=ticket.project.id,
+            user=request.user,
+            message=f"{request.user.username} actualizó el ticket #{ticket.key} de {old_status.name} a {new_status.name}",
+            created_at=ticket.created_at
         )
         
         return Response(TicketSerializer(ticket).data, status=status.HTTP_200_OK)
@@ -226,3 +288,167 @@ class UpcomingDueTicketsView(APIView):
         results = sorted(results, key=lambda x: x['message'])
 
         return Response(results)
+    
+    
+    
+
+class TicketAssignToSprintAPIView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+    
+    def patch(self, request, project_id, ticket_id):
+        
+        project = get_object_or_404(Project, id=project_id)
+        ticket = get_object_or_404(Ticket, id=ticket_id, project=project)
+        
+        sprint_id = request.data.get('sprint_id')
+        
+        # Permitir quitar del sprint (backlog)
+        if sprint_id in [None, '']:
+            ticket.sprint = None
+            ticket.save()
+            return Response(TicketSerializer(ticket).data, status=status.HTTP_200_OK)
+        
+        try:
+            sprint = project.sprints.get(id=sprint_id)
+        except Sprint.DoesNotExist:
+            return Response({'detail': 'Sprint no encontrado en este proyecto'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Validación opcional (recomendada)
+        if not sprint.is_active:
+            return Response({'detail': 'El sprint no está activo'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        ticket.sprint = sprint
+        ticket.save()
+        
+        return Response(TicketSerializer(ticket).data, status=status.HTTP_200_OK)
+
+
+
+class TicketByStatusListAPIView(ListAPIView):
+    
+    permission_classes = [IsAuthenticated]
+    pagination_class = TicketPagination
+    serializer_class = TicketsByStatusListSerializer
+    
+    def get_queryset(self):
+        
+        project_id = self.kwargs.get('project_id') 
+        
+        tickets_queryset = Ticket.objects.filter(
+            is_active=True
+        ).select_related(
+            'project',
+            'status',
+            'assigned_to',
+            'created_by'
+        ).prefetch_related(
+            'labels'
+        )
+        
+        queryset = Status.objects.filter(
+            project__members=self.request.user,
+            project__id=project_id,
+            is_active=True
+        ).annotate(
+            tickets_count=Count('tickets', filter=Q(tickets__is_active=True))
+        ).prefetch_related(
+            Prefetch('tickets', queryset=tickets_queryset)
+        ).order_by('order')
+        
+        search_term = self.request.query_params.get('search_term')
+        if search_term:
+            queryset = queryset.filter(Q(tickets__title__icontains=search_term) | Q(tickets__key__icontains=search_term) | Q(tickets__key__icontains=search_term)).distinct()
+        
+        return queryset
+    
+    
+    def list(self, request, *args, **kwargs):
+        
+        pagination = request.query_params.get('paginate', 'true').lower()
+        queryset = self.get_queryset()
+        
+        if pagination == 'false':
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'count': queryset.count(),
+                'results': serializer.data
+            })
+            
+        return super().list(request, *args, **kwargs)
+    
+    
+    
+    
+
+class TicketAssignedToUpdateAPIView(UpdateAPIView):
+    
+    serializer_class = AssignTicketSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_project(self):
+        return get_object_or_404(Project, id=self.kwargs['project_id'])
+
+    def get_object(self):
+        project = self.get_project()
+        return get_object_or_404(
+            Ticket,
+            id=self.kwargs['ticket_id'],
+            project=project
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['project'] = self.get_project()
+        return context
+
+    def perform_update(self, serializer):
+        project = self.get_project()
+
+        if not project.members.filter(id=self.request.user.id).exists():
+            raise PermissionDenied("No perteneces a este proyecto")
+
+        ticket = serializer.save()
+        print("Si entro al metodo")
+
+        # (opcional) actividad
+        if ticket.assigned_to:
+            message = f"{self.request.user.username} asignó el ticket a {ticket.assigned_to.username}"
+        else:
+            message = f"{self.request.user.username} desasignó el ticket"
+
+        send_activity(
+            project_id=project.id,
+            user=self.request.user,
+            message=message,
+            created_at=ticket.updated_at
+        )
+
+
+
+
+class TicketDeleteAPIView(APIView):
+    
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, project_id, ticket_id):
+        
+        project = get_object_or_404(Project, id=project_id)
+        ticket = get_object_or_404(Ticket, id=ticket_id, project=project)
+        
+        if not project.members.filter(id=request.user.id).exists():
+            raise PermissionDenied("No perteneces a este proyecto")
+        
+        ticket.is_active = False
+        ticket.save()
+        
+        # send_activity(
+        #     project_id=project.id,
+        #     user=request.user,
+        #     message=f"{request.user.username} eliminó el ticket #{ticket.key}",
+        #     created_at=timezone.now()
+        # )
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    

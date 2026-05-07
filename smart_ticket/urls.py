@@ -22,4 +22,5 @@ urlpatterns = [
     path('', include('users.urls')),
     path('ticket/', include('ticket.urls')),
     path('project/', include('project.urls')),
+    path('sprint/', include('sprint.urls')),
 ]
