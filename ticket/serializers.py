@@ -20,10 +20,9 @@ class UserSerializer(serializers.ModelSerializer):
 
 class TicketSerializer(serializers.ModelSerializer):
     project = serializers.StringRelatedField()
-    status= serializers.StringRelatedField()
+    status = serializers.StringRelatedField()
     assigned_to = UserSerializer(read_only=True)
     created_by = serializers.StringRelatedField()
-    #labels = serializers.SerializerMethodField()
     tickets_count = serializers.IntegerField(read_only=True)
     
 

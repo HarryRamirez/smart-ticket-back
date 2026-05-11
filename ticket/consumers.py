@@ -4,6 +4,7 @@ import json
 class ActivityConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
+        print("ENTRO AL CONNECT")
         self.project_id = self.scope['url_route']['kwargs']['project_id']
         self.group_name = f'activities_{self.project_id}'
 
@@ -13,6 +14,7 @@ class ActivityConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
+        print("WEBSOCKET ACEPTADO")
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(

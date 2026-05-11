@@ -145,7 +145,6 @@ class BacklogTicketsAPIView(ListAPIView):
     
     
     
-# Metodo que genera la respuesta con ia
 class TicketGenerateView(APIView):
     
     permission_classes = [IsAuthenticated]
@@ -173,7 +172,6 @@ class TicketGenerateView(APIView):
             
 
 
-# Metodo que crea el ticket
 class CreateTicketAPIView(CreateAPIView):
     
     serializer_class = CreateTicketSerializer
@@ -193,12 +191,12 @@ class CreateTicketAPIView(CreateAPIView):
             created_by=self.request.user
         )
 
-        # send_activity(
-        #     project_id=ticket.project.id,
-        #     user=self.request.user,
-        #     message=f"{self.request.user.username} creó el ticket #{ticket.key}",
-        #     created_at=ticket.created_at
-        # )
+        send_activity(
+            project_id=ticket.project.id,
+            user=self.request.user,
+            message=f"{self.request.user.username} creó el ticket #{ticket.key}",
+            created_at=ticket.created_at
+        )
      
      
      
@@ -231,7 +229,7 @@ class UpdateStatusTicketAPIView(APIView):
         
         TicketHistory.objects.create(
             ticket=ticket,
-            changed_by=request.user,
+            changed_by=request.user, 
             old_status=old_status,
             new_status=new_status
         )
@@ -239,8 +237,8 @@ class UpdateStatusTicketAPIView(APIView):
         send_activity(
             project_id=ticket.project.id,
             user=request.user,
-            message=f"{request.user.username} actualizó el ticket #{ticket.key} de {old_status.name} a {new_status.name}",
-            created_at=ticket.created_at
+            message=f"{request.user.username} cambió el estado de #{ticket.key} de '{old_status.name}' a '{new_status.name}'",
+            created_at=timezone.now()
         )
         
         return Response(TicketSerializer(ticket).data, status=status.HTTP_200_OK)
@@ -264,8 +262,8 @@ class UpcomingDueTicketsView(APIView):
 
         results = []
 
-        for t in tickets:
-            due_date = timezone.localtime(t.due_date)
+        for ticket in tickets:
+            due_date = timezone.localtime(ticket.due_date)
             due_day = due_date.date()
 
             if due_day == today:
@@ -279,8 +277,8 @@ class UpcomingDueTicketsView(APIView):
             hour = due_date.strftime("%I:%M %p")
 
             results.append({
-                "key": t.key,
-                "title": t.title,
+                "key": ticket.key,
+                "title": ticket.title,
                 "message": f"{label}, {hour}"
             })
 
@@ -409,7 +407,6 @@ class TicketAssignedToUpdateAPIView(UpdateAPIView):
             raise PermissionDenied("No perteneces a este proyecto")
 
         ticket = serializer.save()
-        print("Si entro al metodo")
 
         # (opcional) actividad
         if ticket.assigned_to:

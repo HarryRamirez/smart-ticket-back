@@ -1,14 +1,14 @@
 from django.urls import path
 
 
-from .views import ActivityAPIView, DashboardCardsAPIView, MemberSearchProjectAPIView, ProjectDeleteAPIView, ProjectListAPIView, CreateProjectAPIView, GetProjectAPIView, ProjectMemberCreateAPIView, ProjectMemberDeleteAPIView, ProjectMemberUpdateRoleAPIView, ProjectMembersListAPIView, StatusCreateAPIView, StatusDeleteAPIView, StatusProjectAPIView, UpdateProjectAPIView, DeleteProjectAPIView
+from .views import ActivityAPIView, DashboardCardsAPIView, MemberSearchProjectAPIView, ProjectDeleteAPIView, ProjectListAPIView, CreateProjectAPIView, RetrieveProjectAPIView, ProjectMemberCreateAPIView, ProjectMemberDeleteAPIView, ProjectMemberUpdateRoleAPIView, ProjectMembersListAPIView, StatusCreateAPIView, StatusDeleteAPIView, StatusProjectAPIView, UpdateProjectAPIView, DeleteProjectAPIView
 
 urlpatterns = [
     path("list/", ProjectListAPIView.as_view(), name="project-list"),
     path("status_project/<int:pk>/", StatusProjectAPIView.as_view(), name="project-status"),
     path('<int:pk>/recent_activity/', ActivityAPIView.as_view()),
     path("create/", CreateProjectAPIView.as_view(), name="project-create"),
-    path("<int:pk>/", GetProjectAPIView.as_view(), name="project-detail"),
+    path("<int:pk>/", RetrieveProjectAPIView.as_view(), name="project-detail"),
     path("update/<int:pk>/", UpdateProjectAPIView.as_view(), name="project-update"),
     path("delete/", DeleteProjectAPIView.as_view(), name="project-delete"),
     path("<int:pk>/members/", ProjectMembersListAPIView.as_view(), name="project-members"),

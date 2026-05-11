@@ -12,7 +12,7 @@ from rest_framework import status
 
 from ticket.models import Attachment, Comment, Status, Ticket, TicketHistory
 from .models import Project, ProjectMember
-from .serializers import CreateProjectSerializer, DashboardCardsSerializer, ProjectListSerialzer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusCreateSerializer, StatusProjectSerializer, UserSerializer
+from .serializers import CreateProjectSerializer, DashboardCardsSerializer, ProjectListSerializer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusCreateSerializer, StatusProjectSerializer, UserSerializer
 import logging
 
 logger = logging.getLogger(__name__)    
@@ -27,7 +27,7 @@ class ProjectPagination(PageNumberPagination):
 class ProjectListAPIView(ListAPIView):
     
     permission_classes = [IsAuthenticated]
-    serializer_class = ProjectListSerialzer
+    serializer_class = ProjectListSerializer
     pagination_class = ProjectPagination
 
     def get_queryset(self):
@@ -87,58 +87,58 @@ class ActivityAPIView(APIView):
         user = request.user
         activities = []
 
-        # Tickets creados
+# Tickets creados
         tickets = Ticket.objects.filter(project_id=pk).select_related('created_by')[:10]
 
-        for t in tickets:
-            actor = "Tú" if t.created_by == user else t.created_by.username
+        for ticket in tickets:
+            actor = "Tú" if ticket.created_by == user else ticket.created_by.username
 
             activities.append({
-                "message": f"{actor} creó el ticket #{t.key}",
+                "message": f"{actor} creó el ticket #{ticket.key}",
                 "user": actor,
-                "created_at": t.created_at
+                "created_at": ticket.created_at
             })
 
         # Historial de estados
         history = TicketHistory.objects.filter(ticket__project_id=pk)\
                   .select_related('changed_by', 'ticket', 'old_status', 'new_status')[:10]
 
-        for h in history:
-            actor = "Tú" if h.changed_by == user else h.changed_by.username
+        for history_entry in history:
+            actor = "Tú" if history_entry.changed_by == user else history_entry.changed_by.username
 
             activities.append({
-                "message": f"{actor} cambió el estado de #{h.ticket.key} de '{h.old_status}' a '{h.new_status}'",
+                "message": f"{actor} cambió el estado de #{history_entry.ticket.key} de '{history_entry.old_status}' a '{history_entry.new_status}'",
                 "user": actor,
-                "created_at": h.created_at
+                "created_at": history_entry.created_at
             })
 
         # Comentarios
         comments = Comment.objects.filter(ticket__project_id=pk)\
                    .select_related('user', 'ticket')[:10]
 
-        for c in comments:
-            actor = "Tú" if c.user == user else c.user.username
+        for comment in comments:
+            actor = "Tú" if comment.user == user else comment.user.username
 
             activities.append({
-                "message": f"{actor} comentó en el ticket #{c.ticket.key}",
+                "message": f"{actor}发表评论 en el ticket #{comment.ticket.key}",
                 "user": actor,
-                "created_at": c.created_at
+                "created_at": comment.created_at
             })
 
         # Adjuntos
         attachments = Attachment.objects.filter(ticket__project_id=pk)\
                       .select_related('uploaded_by', 'ticket')[:10]
 
-        for a in attachments:
-            actor = "Tú" if a.uploaded_by == user else a.uploaded_by.username
+        for attachment in attachments:
+            actor = "Tú" if attachment.uploaded_by == user else attachment.uploaded_by.username
 
             activities.append({
-                "message": f"{actor} subió un archivo al ticket #{a.ticket.key}",
+                "message": f"{actor} subió un archivo al ticket #{attachment.ticket.key}",
                 "user": actor,
-                "created_at": a.created_at
+                "created_at": attachment.created_at
             })
 
-        # Ordenar todo por fecha (clave)
+# Ordenar todo por fecha (clave)
         activities = sorted(activities, key=lambda x: x['created_at'], reverse=True)
 
         # Limitar resultados
@@ -151,7 +151,7 @@ class ActivityAPIView(APIView):
         return Response(activities)      
     
 
-class GetProjectAPIView(APIView):
+class RetrieveProjectAPIView(APIView):
     
     permission_classes = [IsAuthenticated]
     
@@ -160,8 +160,8 @@ class GetProjectAPIView(APIView):
             project = Project.objects.select_related('created_by')\
                              .prefetch_related('members', 'sprints')\
                              .get(pk=pk, members=request.user)
-                             
-            serializer = ProjectListSerialzer(project)
+                            
+            serializer = ProjectListSerializer(project)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Project.DoesNotExist:
             return Response({'message': 'Proyecto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
@@ -177,7 +177,7 @@ class CreateProjectAPIView(APIView):
         if serializer.is_valid():
             project = serializer.save()
 
-            return Response(ProjectListSerialzer(project).data, status=status.HTTP_201_CREATED)
+            return Response(ProjectListSerializer(project).data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -197,7 +197,7 @@ class UpdateProjectAPIView(APIView):
         
         if serializer.is_valid():
             instance = serializer.save()
-            return Response(ProjectListSerialzer(instance).data, status=status.HTTP_200_OK)
+            return Response(ProjectListSerializer(instance).data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -208,14 +208,14 @@ class DeleteProjectAPIView(APIView):
     
     def delete(self, request):
 
-        ids = request.data.get('ids', [])
+        project_ids = request.data.get('ids', [])
         
-        if not isinstance(ids, list):
+        if not isinstance(project_ids, list):
             return Response({'message': 'ids debe ser una lista'}, status=status.HTTP_400_BAD_REQUEST)
-        if not ids:
+        if not project_ids:
             return Response({'message': 'No se proporcionaron ids'}, status=status.HTTP_400_BAD_REQUEST)
         
-        project = Project.objects.filter(id__in=ids, members=request.user)
+        project = Project.objects.filter(id__in=project_ids, members=request.user)
         project.delete()
         
         return Response({'message': 'Proyectos eliminados correctamente'}, status=status.HTTP_200_OK)

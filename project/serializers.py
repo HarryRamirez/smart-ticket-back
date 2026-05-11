@@ -21,7 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
             return f"{initials}"
         
         
-class ProjectListSerialzer(serializers.ModelSerializer):
+class ProjectListSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
     members_count = serializers.IntegerField(read_only=True)
     members = UserSerializer(many=True, read_only=True)
