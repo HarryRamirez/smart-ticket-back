@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from project.models import Project
-from .models import Ticket, Status
+from .models import Ticket, Status, Label
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -114,3 +114,35 @@ class AssignTicketSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+
+class UpdateTicketSerializer(serializers.ModelSerializer):
+
+    status = serializers.PrimaryKeyRelatedField(
+        queryset=Status.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = Ticket
+        fields = [
+            'title', 'key','description', 'category', 'priority', 'type',
+            'summary', 'suggested_solution', 'status',
+            'due_date'
+        ]
+
+
+    def validate_status(self, value):
+        project = self.context.get('project')
+        if value and project and value.project_id != project.id:
+            raise serializers.ValidationError("El estado no pertenece a este proyecto")
+        return value
+
+
+
+
+class LabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Label
+        fields = ['id', 'name', 'color']

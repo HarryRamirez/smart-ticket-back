@@ -1,13 +1,14 @@
 from django.urls import path
 
 
-from .views import BacklogTicketsAPIView, TicketAssignToSprintAPIView, TicketAssignedToUpdateAPIView, TicketByStatusListAPIView, TicketDeleteAPIView, TicketGenerateView, CreateTicketAPIView, TicketListAPIView, UpdateStatusTicketAPIView, UpcomingDueTicketsView
+from .views import BacklogTicketsAPIView, TicketAssignToSprintAPIView, TicketAssignedToUpdateAPIView, TicketByStatusListAPIView, TicketDeleteAPIView, TicketGenerateView, CreateTicketAPIView, TicketListAPIView, UpdateStatusTicketAPIView, UpdateTicketAPIView, UpcomingDueTicketsView
 
 urlpatterns = [
     path("project/<int:project_id>/list/", TicketListAPIView.as_view(), name="ticket-list"),
     path("generate/", TicketGenerateView.as_view(), name="ticket-generate"),
     path("project/<int:project_id>/create/", CreateTicketAPIView.as_view(), name="ticket-create"),
     path("<int:ticket_id>/project/<int:project_id>/update_status/", UpdateStatusTicketAPIView.as_view()),
+    path('<int:ticket_id>/project/<int:project_id>/update/', UpdateTicketAPIView.as_view(), name='ticket-update'),
     path('project/<int:project_id>/due_tickets/', UpcomingDueTicketsView.as_view()),
     path('project/<int:project_id>/backlog/', BacklogTicketsAPIView.as_view(), name='backlog-tickets'),
     path('<int:ticket_id>/project/<int:project_id>/assign/', TicketAssignToSprintAPIView.as_view(), name='assign-ticket-to-sprint'),

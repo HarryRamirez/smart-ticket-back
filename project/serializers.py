@@ -119,6 +119,18 @@ class CreateProjectSerializer(serializers.ModelSerializer):
 
         return project
 
+class UpdateProjectSerializer(serializers.ModelSerializer):
+    
+    avatar = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Project
+        fields = ['key', 'name', 'description']
+        
+    
+
+
+
 
 
 class DashboardCardsSerializer(serializers.Serializer):
@@ -131,12 +143,29 @@ class DashboardCardsSerializer(serializers.Serializer):
 
 
 class StatusCreateSerializer(serializers.ModelSerializer):
-    
+
     class Meta:
         model = Status
         fields = ['name', 'order']
+
+
+
+class StatusUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Status
+        fields = ['name']
     
-        
+
+
+
+class ProjectActiveSerializer(serializers.ModelSerializer):
+    
+    members = UserSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Project
+        fields = ['id', 'name', 'key', 'members']
  
 
 

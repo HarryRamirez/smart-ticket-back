@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from project.models import Project, Sprint
-from sprint.serializers import SprintCreateSerializer, SprintListSerializer
+from sprint.serializers import SprintCreateSerializer, SprintListSerializer, SprintUpdateSerializer
 from ticket.models import Ticket
 
 # Create your views here.
@@ -84,18 +84,34 @@ class SprintUpdateStatusAPIView(APIView):
 
 
 class SprintDeleteAPIView(APIView):
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     def delete(self, request, sprint_id, project_id):
-        
+
         project = get_object_or_404(Project, id=project_id, members=request.user)
         sprint = get_object_or_404(Sprint, id=sprint_id, project=project,  is_active=True)
-        
+
         if sprint.tickets.exists():
             return Response({'error': 'No se puede eliminar un sprint con tickets asignados'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         sprint.is_active = False
         sprint.save()
-        
+
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SprintUpdateAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, sprint_id, project_id):
+        project = get_object_or_404(Project, id=project_id, members=request.user)
+        sprint = get_object_or_404(Sprint, id=sprint_id, project=project)
+
+        serializer = SprintUpdateSerializer(sprint, data=request.data, partial=True)
+        if serializer.is_valid():
+            sprint = serializer.save()
+            return Response(SprintListSerializer(sprint).data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

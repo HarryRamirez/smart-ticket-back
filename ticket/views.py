@@ -17,7 +17,7 @@ from asgiref.sync import async_to_sync
 from project.models import Project, Sprint
 from .models import Status, Ticket, TicketHistory
 from utils.llm_client import ticket_with_llm
-from .serializers import AssignTicketSerializer, BacklogTicketsSerializer, CreateTicketSerializer, TicketSerializer, TicketsByStatusListSerializer
+from .serializers import AssignTicketSerializer, BacklogTicketsSerializer, CreateTicketSerializer, TicketSerializer, TicketsByStatusListSerializer, UpdateTicketSerializer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -425,27 +425,58 @@ class TicketAssignedToUpdateAPIView(UpdateAPIView):
 
 
 class TicketDeleteAPIView(APIView):
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     def delete(self, request, project_id, ticket_id):
-        
+
         project = get_object_or_404(Project, id=project_id)
         ticket = get_object_or_404(Ticket, id=ticket_id, project=project)
-        
+
         if not project.members.filter(id=request.user.id).exists():
             raise PermissionDenied("No perteneces a este proyecto")
-        
+
         ticket.is_active = False
         ticket.save()
-        
+
         # send_activity(
         #     project_id=project.id,
         #     user=request.user,
         #     message=f"{request.user.username} eliminó el ticket #{ticket.key}",
         #     created_at=timezone.now()
         # )
-        
+
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UpdateTicketAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, project_id, ticket_id):
+        project = get_object_or_404(Project, id=project_id)
+
+        if not project.members.filter(id=request.user.id).exists():
+            raise PermissionDenied("No perteneces a este proyecto")
+
+        ticket = get_object_or_404(Ticket, id=ticket_id, project=project)
+
+        old_status = ticket.status
+        serializer = UpdateTicketSerializer(ticket, data=request.data, partial=True, context={'project': project})
+
+        if serializer.is_valid():
+            ticket = serializer.save()
+
+            if 'status' in request.data and old_status != ticket.status:
+                TicketHistory.objects.create(
+                    ticket=ticket,
+                    changed_by=request.user,
+                    old_status=old_status,
+                    new_status=ticket.status
+                )
+
+            return Response(TicketSerializer(ticket).data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     

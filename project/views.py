@@ -11,8 +11,9 @@ from django.utils import timezone
 from rest_framework import status
 
 from ticket.models import Attachment, Comment, Status, Ticket, TicketHistory
+from ticket.serializers import TicketSerializer
 from .models import Project, ProjectMember
-from .serializers import CreateProjectSerializer, DashboardCardsSerializer, ProjectListSerializer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusCreateSerializer, StatusProjectSerializer, UserSerializer
+from .serializers import CreateProjectSerializer, DashboardCardsSerializer, ProjectActiveSerializer, ProjectListSerializer, ProjectMemberCreateSerializer, ProjectMemberSerializer, StatusCreateSerializer, StatusProjectSerializer, StatusSerializer, StatusUpdateSerializer, UpdateProjectSerializer, UserSerializer
 import logging
 
 logger = logging.getLogger(__name__)    
@@ -187,13 +188,12 @@ class UpdateProjectAPIView(APIView):
     
     permission_classes = [IsAuthenticated]
     
-    def put(self, request, pk):
-        try:
-            project = Project.objects.get(pk=pk, members=request.user)
-        except Project.DoesNotExist:
-            return Response({'message': 'Proyecto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+    def patch(self, request, project_id):
         
-        serializer = CreateProjectSerializer(project, data=request.data, partial=True)
+        project = get_object_or_404(Project, id=project_id, members=request.user)
+        
+        
+        serializer = UpdateProjectSerializer(project, data=request.data, partial=True)
         
         if serializer.is_valid():
             instance = serializer.save()
@@ -472,11 +472,11 @@ class ProjectDeleteAPIView(APIView):
     
     
 class StatusDeleteAPIView(APIView):
-    
+
     permission_classes = [IsAuthenticated]
-    
+
     def delete(self, request, project_id, status_id):
-        
+
         project = get_object_or_404(Project, id=project_id)
         status_obj = get_object_or_404(Status, id=status_id, project=project)
 
@@ -489,3 +489,47 @@ class StatusDeleteAPIView(APIView):
         status_obj.save()
 
         return Response({'message': 'Estado eliminado correctamente'}, status=status.HTTP_200_OK)
+
+
+class StatusUpdateAPIView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, project_id, status_id):
+        project = get_object_or_404(Project, id=project_id)
+        status_obj = get_object_or_404(Status, id=status_id, project=project)
+
+        if not project.members.filter(id=request.user.id).exists():
+            return Response(
+                {'message': 'No tienes acceso a este proyecto'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = StatusUpdateSerializer(status_obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            status_obj = serializer.save()
+            return Response(StatusSerializer(status_obj).data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
+    
+    
+class ProjectActiveAPIView(ListAPIView):
+    
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProjectActiveSerializer
+
+    def get_queryset(self):
+        return Project.objects.filter(members=self.request.user).distinct()
+
+
+
+class DashboardTicketsRecenAPIView(ListAPIView):
+    
+    permission_classes = [IsAuthenticated]
+    serializer_class = TicketSerializer
+
+    def get_queryset(self):
+        return Ticket.objects.filter(project__members=self.request.user).order_by('-created_at')[:5]

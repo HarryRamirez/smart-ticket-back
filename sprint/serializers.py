@@ -42,7 +42,15 @@ class SprintListSerializer(serializers.ModelSerializer):
 
 
 class SprintCreateSerializer(serializers.ModelSerializer):
-    
+
+    class Meta:
+        model = Sprint
+        fields = ['name', 'start_date', 'end_date', 'status']
+
+
+
+class SprintUpdateSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Sprint
         fields = ['name', 'start_date', 'end_date', 'status']
